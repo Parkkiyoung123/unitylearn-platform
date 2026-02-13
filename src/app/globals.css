@@ -2,26 +2,412 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * UnityLearn Color System
+ * 
+ * Light Mode: Default
+ * Dark Mode: Applied via .dark class (managed by next-themes)
+ * 
+ * Color Palette:
+ * - Primary: Blue (#3b82f6)
+ * - Difficulty: Beginner(Green), Easy(Teal), Normal(Blue), Hard(Orange), Expert(Red)
+ */
+
 :root {
+  /* Base colors - Light mode */
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f172a;
+  
+  /* Card colors */
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  
+  /* Popover colors */
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  
+  /* Primary: Blue (#3b82f6) */
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  
+  /* Secondary */
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  
+  /* Muted */
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  
+  /* Accent */
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+  
+  /* Destructive */
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  
+  /* Border & Input */
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #3b82f6;
+  
+  /* Border radius */
+  --radius: 0.5rem;
+  
+  /* Difficulty Level Colors - Light Mode */
+  --difficulty-beginner: #22c55e;  /* Green */
+  --difficulty-easy: #14b8a6;      /* Teal */
+  --difficulty-normal: #3b82f6;    /* Blue */
+  --difficulty-hard: #f97316;      /* Orange */
+  --difficulty-expert: #ef4444;    /* Red */
 }
 
+/* Dark Mode - Slate-based palette */
+.dark {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  
+  --card: #1e293b;
+  --card-foreground: #f8fafc;
+  
+  --popover: #1e293b;
+  --popover-foreground: #f8fafc;
+  
+  /* Primary: Blue (lighter for dark mode) */
+  --primary: #60a5fa;
+  --primary-foreground: #0f172a;
+  
+  --secondary: #334155;
+  --secondary-foreground: #f8fafc;
+  
+  --muted: #334155;
+  --muted-foreground: #94a3b8;
+  
+  --accent: #334155;
+  --accent-foreground: #f8fafc;
+  
+  --destructive: #f87171;
+  --destructive-foreground: #ffffff;
+  
+  --border: #334155;
+  --input: #334155;
+  --ring: #60a5fa;
+  
+  /* Difficulty Level Colors - Dark Mode (lighter variants) */
+  --difficulty-beginner: #4ade80;  /* Light Green */
+  --difficulty-easy: #2dd4bf;      /* Light Teal */
+  --difficulty-normal: #60a5fa;    /* Light Blue */
+  --difficulty-hard: #fb923c;      /* Light Orange */
+  --difficulty-expert: #f87171;    /* Light Red */
+}
+
+/* System preference fallback (used when JS is disabled) */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not(.light):not(.dark) {
+    --background: #0f172a;
+    --foreground: #f8fafc;
+    --card: #1e293b;
+    --card-foreground: #f8fafc;
+    --popover: #1e293b;
+    --popover-foreground: #f8fafc;
+    --primary: #60a5fa;
+    --primary-foreground: #0f172a;
+    --secondary: #334155;
+    --secondary-foreground: #f8fafc;
+    --muted: #334155;
+    --muted-foreground: #94a3b8;
+    --accent: #334155;
+    --accent-foreground: #f8fafc;
+    --destructive: #f87171;
+    --destructive-foreground: #ffffff;
+    --border: #334155;
+    --input: #334155;
+    --ring: #60a5fa;
+    --difficulty-beginner: #4ade80;
+    --difficulty-easy: #2dd4bf;
+    --difficulty-normal: #60a5fa;
+    --difficulty-hard: #fb923c;
+    --difficulty-expert: #f87171;
   }
+}
+
+/* Global styles */
+* {
+  border-color: var(--border);
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-pretendard), Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+  font-feature-settings: "tnum";
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+/* Theme transition - smooth color changes */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 0ms;
+}
+
+.theme-transitioning *,
+.theme-transitioning *::before,
+.theme-transitioning *::after {
+  transition-duration: 200ms;
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Selection styles */
+::selection {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+/* ========================================
+   TOUCH TARGET UTILITIES
+   ======================================== */
+
+@layer components {
+  /**
+   * Base touch target class
+   * Ensures minimum 44px height for all interactive elements
+   */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /**
+   * Minimum touch target for links and buttons
+   * Use on elements that need proper touch area
+   */
+  .touch-target-min {
+    min-height: 44px;
+  }
+
+  /**
+   * Touch target with padding
+   * Provides adequate spacing around touch targets
+   */
+  .touch-target-padded {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px;
+  }
+
+  /**
+   * Large touch target for important CTAs
+   */
+  .touch-target-lg {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  /**
+   * Touch spacing utilities
+   * Ensures adequate spacing between touch targets
+   */
+  .touch-gap {
+    gap: 8px;
+  }
+
+  .touch-gap-sm {
+    gap: 6px;
+  }
+
+  .touch-gap-md {
+    gap: 12px;
+  }
+
+  /**
+   * Touch-friendly button styles
+   */
+  .btn-touch {
+    @apply touch-target inline-flex items-center justify-center;
+  }
+
+  /**
+   * Touch-friendly link styles
+   */
+  .link-touch {
+    @apply touch-target-min inline-flex items-center;
+  }
+
+  /**
+   * Form input touch optimization
+   */
+  .input-touch {
+    min-height: 44px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  /**
+   * Safe area padding for mobile devices with notches
+   */
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-area-pt {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .safe-area-pl {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+
+  .safe-area-pr {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  /**
+   * Scroll snap utilities for mobile carousels
+   */
+  .snap-x-mandatory {
+    scroll-snap-type: x mandatory;
+  }
+
+  .snap-start {
+    scroll-snap-align: start;
+  }
+
+  .snap-center {
+    scroll-snap-align: center;
+  }
+
+  /**
+   * Hide scrollbar but keep functionality
+   */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /**
+   * Touch action optimization
+   */
+  .touch-pan-y {
+    touch-action: pan-y;
+  }
+
+  .touch-pan-x {
+    touch-action: pan-x;
+  }
+
+  .touch-none {
+    touch-action: none;
+  }
+
+  /**
+   * Responsive typography
+   */
+  .text-responsive-sm {
+    font-size: clamp(0.875rem, 0.8rem + 0.25vw, 1rem);
+  }
+
+  .text-responsive-base {
+    font-size: clamp(1rem, 0.9rem + 0.35vw, 1.125rem);
+  }
+
+  .text-responsive-lg {
+    font-size: clamp(1.125rem, 1rem + 0.5vw, 1.25rem);
+  }
+
+  .text-responsive-xl {
+    font-size: clamp(1.25rem, 1.1rem + 0.75vw, 1.5rem);
+  }
+
+  /**
+   * Aspect ratio utilities
+   */
+  .aspect-video {
+    aspect-ratio: 16 / 9;
+  }
+
+  .aspect-square {
+    aspect-ratio: 1 / 1;
+  }
+
+  .aspect-portrait {
+    aspect-ratio: 3 / 4;
+  }
+}
+
+/* Touch optimization for mobile */
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Utility classes */
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+  
+  /* Container query utilities */
+  .container-type-inline {
+    container-type: inline-size;
+  }
+
+  .container-type-size {
+    container-type: size;
+  }
+  
+  /* Difficulty badge utilities */
+  .difficulty-beginner {
+    color: var(--difficulty-beginner);
+  }
+  
+  .difficulty-easy {
+    color: var(--difficulty-easy);
+  }
+  
+  .difficulty-normal {
+    color: var(--difficulty-normal);
+  }
+  
+  .difficulty-hard {
+    color: var(--difficulty-hard);
+  }
+  
+  .difficulty-expert {
+    color: var(--difficulty-expert);
+  }
+  
+  /* Background utilities for difficulty */
+  .bg-difficulty-beginner {
+    background-color: var(--difficulty-beginner);
+  }
+  
+  .bg-difficulty-easy {
+    background-color: var(--difficulty-easy);
+  }
+  
+  .bg-difficulty-normal {
+    background-color: var(--difficulty-normal);
+  }
+  
+  .bg-difficulty-hard {
+    background-color: var(--difficulty-hard);
+  }
+  
+  .bg-difficulty-expert {
+    background-color: var(--difficulty-expert);
   }
 }

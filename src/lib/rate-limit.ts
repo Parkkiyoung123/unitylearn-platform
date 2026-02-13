@@ -29,3 +29,9 @@ export const guestRateLimit = new Ratelimit({
   analytics: true,
   prefix: "ratelimit:guest",
 })
+
+// Helper function to get IP address
+export function getIP(request: Request): string {
+  const xff = request.headers.get("x-forwarded-for")
+  return xff ? xff.split(",")[0] : "127.0.0.1"
+}

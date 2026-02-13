@@ -1,0 +1,342 @@
+// UnityLearn - Unity Bug Diagnosis Learning Platform
+// Prisma Schema with DDD Principles Applied
+// Optimized for Neon PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================
+// DOMAIN: User Management (Aggregate Root: User)
+// =============================================
+
+enum UserLevel {
+  Beginner
+  Intermediate
+  Advanced
+  Expert
+  Master
+}
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  emailVerified   Boolean  @default(false) @map("email_verified")
+  name            String?
+  image           String?  // URL to avatar image (Better Auth compatible)
+  level           UserLevel @default(Beginner)
+  streak          Int      @default(0)  // Current streak days
+  
+  // Audit fields
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  // Domain Relationships
+  progress    UserProgress?    // One-to-One: Each user has one progress record
+  attempts    QuizAttempt[]    // One-to-Many: User attempts many quizzes
+  
+  // Better Auth Relationships
+  accounts    Account[]
+  sessions    Session[]
+  
+  // Index for email lookups (auth queries)
+  @@index([email])
+  @@index([level])  // For leaderboard filtering
+  @@map("users")
+}
+
+// =============================================
+// DOMAIN: Learning Progress (Aggregate Root: UserProgress)
+// =============================================
+
+model UserProgress {
+  id       String @id @default(uuid())
+  userId   String @unique @map("user_id")  // One-to-One with User
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  currentLevel      UserLevel @default(Beginner) @map("current_level")
+  totalAttempts     Int       @default(0) @map("total_attempts")
+  correctCount      Int       @default(0) @map("correct_count")
+  accuracy          Float     @default(0)  // Calculated: correctCount / totalAttempts
+  
+  // Gamification fields
+  streakDays        Int       @default(0) @map("streak_days")
+  lastAttemptDate   DateTime? @map("last_attempt_date")
+  weeklyGoal        Int       @default(10) @map("weekly_goal")  // Target quizzes per week
+  
+  // Category-specific progress (denormalized for performance)
+  // Structure: { "categoryId": { "attempts": 10, "correct": 8, "completed": [quizIds] } }
+  categoryProgress  Json?     @map("category_progress")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  // Index for streak calculation queries
+  @@index([lastAttemptDate])
+  @@map("user_progress")
+}
+
+// =============================================
+// DOMAIN: Quiz Management (Aggregate Root: Category)
+// =============================================
+
+model Category {
+  id          String  @id @default(uuid())
+  name        String  @unique  // Domain terminology: e.g., "NullReference", "Performance"
+  description String? // Brief explanation of the category
+  icon        String? // Icon identifier or URL
+  orderIndex  Int     @map("order_index")  // For UI ordering
+  
+  // Domain Relationships
+  quizzes     Quiz[]  // One-to-Many: Category contains many quizzes
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  @@index([orderIndex])
+  @@map("categories")
+}
+
+enum QuizLevel {
+  Easy
+  Medium
+  Hard
+}
+
+model Quiz {
+  id          String    @id @default(uuid())
+  
+  // Foreign Key to Category
+  categoryId  String    @map("category_id")
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  
+  level       QuizLevel @default(Easy)
+  title       String    // The bug scenario title
+  description String    // Context about the bug situation
+  codeSnippet String?   @map("code_snippet")  // The problematic code
+  
+  // Quiz structure - options stored as JSON for flexibility
+  // [{ "id": "A", "text": "NullReferenceException", "isCause": true/false }]
+  options     Json      // Multiple choice options
+  
+  // Correct answers
+  correctCause    String  @map("correct_cause")    // Option ID for cause
+  correctSolution String  @map("correct_solution") // Option ID for solution
+  
+  // Educational content
+  explanation String  // Detailed explanation after answering
+  hint        String? // Optional hint for struggling users
+  
+  // Metadata
+  tags        Json?   // Array of tags: ["animation", "physics", "ui"]
+  isActive    Boolean @default(true) @map("is_active")
+  
+  // Statistics (denormalized for performance)
+  totalAttempts   Int @default(0) @map("total_attempts")
+  correctAttempts Int @default(0) @map("correct_attempts")
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  // Domain Relationships
+  attempts    QuizAttempt[]
+  guestAttempts GuestQuizAttempt[]
+  
+  // Performance indexes for quiz listing
+  @@index([categoryId, level, isActive])  // Primary query path: get active quizzes by category+level
+  @@index([level, isActive])              // For difficulty-based filtering
+  @@index([tags])                         // GIN index for tag queries (if supported)
+  @@index([totalAttempts, correctAttempts]) // For popularity sorting
+  @@map("quizzes")
+}
+
+// =============================================
+// DOMAIN: Quiz Attempts (Event Sourcing Pattern)
+// =============================================
+
+model QuizAttempt {
+  id        String   @id @default(uuid())
+  
+  // Foreign Keys
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  quizId    String   @map("quiz_id")
+  quiz      Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  
+  // User's answers
+  selectedCause    String  @map("selected_cause")    // User's cause selection
+  selectedSolution String  @map("selected_solution") // User's solution selection
+  
+  // Scoring
+  isCorrect         Boolean @map("is_correct")         // Both cause AND solution correct
+  causeCorrect      Boolean @map("cause_correct")      // Cause only
+  solutionCorrect   Boolean @map("solution_correct")   // Solution only
+  
+  timeSpentSeconds  Int     @map("time_spent_seconds") // Performance metric
+  
+  attemptDate       DateTime @default(now()) @map("attempt_date")
+  createdAt         DateTime @default(now()) @map("created_at")
+  
+  // Indexing strategy for analytics and user history
+  @@index([userId, attemptDate])      // User history queries (DESC order by date)
+  @@index([userId, isCorrect])        // Accuracy calculations per user
+  @@index([quizId, isCorrect])        // Quiz success rate analytics
+  @@index([attemptDate])              // Time-based analytics (daily/weekly reports)
+  @@map("quiz_attempts")
+}
+
+// =============================================
+// DOMAIN: Guest Quiz Tracking (TTL Pattern)
+// =============================================
+
+model GuestQuizAttempt {
+  id          String   @id @default(uuid())
+  sessionId   String   @map("session_id")  // Browser session or temporary ID
+  
+  quizId      String   @map("quiz_id")
+  quiz        Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  
+  // User's answers (same structure as QuizAttempt)
+  selectedCause    String  @map("selected_cause")
+  selectedSolution String  @map("selected_solution")
+  isCorrect        Boolean @map("is_correct")
+  
+  attemptDate DateTime @default(now()) @map("attempt_date")
+  expiresAt   DateTime @map("expires_at")  // TTL: Auto-delete after 7 days
+  
+  // Index for cleanup job and guest session queries
+  @@index([sessionId, attemptDate])
+  @@index([expiresAt])  // For automated cleanup queries
+  @@map("guest_quiz_attempts")
+}
+
+// =============================================
+// BETTER AUTH TABLES
+// =============================================
+
+model Account {
+  id                    String  @id @default(uuid())
+  userId                String  @map("user_id")
+  accountId             String  @map("account_id")
+  providerId            String  @map("provider_id")
+  accessToken           String? @map("access_token")
+  refreshToken          String? @map("refresh_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  scope                 String?
+  idToken               String? @map("id_token")
+  password              String?
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("accounts")
+}
+
+model Session {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  token          String   @unique
+  expiresAt      DateTime @map("expires_at")
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("sessions")
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  
+  @@map("verifications")
+}
+
+// =============================================
+// DATABASE OPTIMIZATION NOTES
+// =============================================
+
+/*
+INDEX DESIGN RATIONALE (Martin Fowler DDD Principles Applied):
+
+1. USER DOMAIN:
+   - users.email: B-tree, O(log n) for authentication lookups
+   - users.level: For filtering leaderboards by skill level
+
+2. QUIZ DOMAIN:
+   - quizzes.categoryId + level + isActive: Composite index for the primary
+     use case: "Show me medium difficulty active quizzes in the Animation category"
+     Order matters: categoryId first (high cardinality), then level, then isActive
+   
+   - quizzes.level + isActive: Covering index for difficulty-only filtering
+   
+   - quizzes.tags: If PostgreSQL supports GIN index on JSONB, use:
+     CREATE INDEX idx_quiz_tags ON quizzes USING GIN(tags);
+     This enables efficient tag-based filtering for "show me all physics-related quizzes"
+
+3. ATTEMPT DOMAIN (Event Log Pattern):
+   - quiz_attempts.userId + attemptDate: Supports "show my recent attempts" efficiently
+     with attemptDate DESC for chronological ordering
+   
+   - quiz_attempts.quizId + isCorrect: Analytics queries for calculating
+     per-quiz success rates
+
+4. GUEST DOMAIN (TTL Pattern):
+   - guest_quiz_attempts.expiresAt: Enables efficient cleanup of expired guest data
+     Run: DELETE FROM guest_quiz_attempts WHERE expires_at < NOW();
+
+PERFORMANCE TARGETS:
+- Quiz listing queries: < 100ms (using composite index)
+- User history queries: < 50ms (using userId + date index)
+- Analytics aggregations: < 500ms (using pre-calculated stats in Quiz table)
+
+DATA INTEGRITY:
+- All foreign keys have ON DELETE actions defined
+- Restrict on Category (prevents accidental deletion of categories with quizzes)
+- Cascade on User/UserProgress (cleanup user data when account deleted)
+- Cascade on Quiz/Attempts (cleanup attempts when quiz removed)
+
+EXTENSIBILITY:
+- JSON fields (options, tags, categoryProgress) allow schema evolution
+  without migrations for new option types or metadata
+- Enum types (UserLevel, QuizLevel) provide type safety while allowing
+  future levels to be added
+*/
+
+// =============================================
+// MIGRATION RECOMMENDATIONS
+// =============================================
+
+/*
+After generating migrations, consider these manual optimizations:
+
+1. Add GIN index for JSON tag queries:
+   CREATE INDEX idx_quizzes_tags ON quizzes USING GIN(tags);
+
+2. Add partial index for active quizzes only (if most quizzes are inactive):
+   CREATE INDEX idx_quizzes_active ON quizzes(category_id, level) WHERE is_active = true;
+
+3. Add BRIN index for time-series data (attemptDate columns):
+   CREATE INDEX idx_attempts_date_brin ON quiz_attempts USING BRIN(attempt_date);
+   (Useful if you have millions of attempts and query by date ranges)
+
+4. Setup automated cleanup for guest attempts:
+   CREATE EXTENSION IF NOT EXISTS pg_cron;
+   SELECT cron.schedule('cleanup-guest-attempts', '0 3 * * *', 
+     $$DELETE FROM guest_quiz_attempts WHERE expires_at < NOW()$$);
+
+5. Consider partitioning quiz_attempts table if expecting >10M records:
+   Partition by RANGE (attempt_date) for monthly partitions
+*/
